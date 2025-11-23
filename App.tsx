@@ -257,13 +257,6 @@ export default function App() {
       setGeneratedContracts(newContracts);
   };
 
-  // Initial load contracts
-  useEffect(() => {
-      // Only run once on mount
-      spawnContractsForLocation('station-x33', 0);
-  }, []);
-
-
   // Travel Logic
   // Ship position for Map Rendering
   const shipPos = useMemo((): Coordinates => {
@@ -377,10 +370,12 @@ export default function App() {
 
   }, [gameState.isFlying, gameState.gameTime]); // Run every tick when flying
 
-  // Trigger contract spawn on arrival
+  // Trigger contract spawn on arrival AND Auto-navigate to services
   useEffect(() => {
       if (!gameState.isFlying && gameState.currentLocationId) {
           spawnContractsForLocation(gameState.currentLocationId, gameState.gameTime);
+          // Auto-navigate to services by clearing selection, bypassing the "YOU ARE HERE" screen
+          setSelectedLocationId(null);
       }
   }, [gameState.currentLocationId, gameState.isFlying]); // When location changes and we stop flying
 
