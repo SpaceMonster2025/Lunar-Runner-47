@@ -5,7 +5,7 @@ interface GameMapProps {
   gameState: GameState;
   locations: Location[];
   onLocationClick: (loc: Location) => void;
-  onHover?: () => void;
+  onHover?: (loc: Location | null) => void;
   shipPosition: Coordinates;
   shipRotation: number;
 }
@@ -23,6 +23,24 @@ const GameMap: React.FC<GameMapProps> = ({ gameState, locations, onLocationClick
     });
     return Array.from(radii).sort((a,b) => a - b);
   }, [locations]);
+
+  // Generate background stars
+  const stars = useMemo(() => {
+      const starCount = 500;
+      const newStars = [];
+      // Create a large field of stars to allow for panning
+      const fieldSize = 4000; 
+      const halfField = fieldSize / 2;
+      
+      for (let i = 0; i < starCount; i++) {
+          const x = (Math.random() * fieldSize) - halfField + CENTER.x;
+          const y = (Math.random() * fieldSize) - halfField + CENTER.y;
+          const size = Math.random() * 1.2 + 0.2;
+          const opacity = Math.random() * 0.6 + 0.2;
+          newStars.push({ x, y, size, opacity });
+      }
+      return newStars;
+  }, []);
 
   const handleWheel = (e: React.WheelEvent) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -125,6 +143,18 @@ const GameMap: React.FC<GameMapProps> = ({ gameState, locations, onLocationClick
         className="w-full h-full relative z-10"
         preserveAspectRatio="xMidYMid slice"
       >
+        {/* Stars */}
+        {stars.map((s, i) => (
+            <circle 
+                key={`star-${i}`} 
+                cx={s.x} 
+                cy={s.y} 
+                r={s.size} 
+                fill="#fff" 
+                opacity={s.opacity} 
+            />
+        ))}
+
         {/* Orbit Rings */}
         {orbits.map(r => (
             <circle 
@@ -161,6 +191,7 @@ const GameMap: React.FC<GameMapProps> = ({ gameState, locations, onLocationClick
         {locations.map(loc => {
           const isCurrent = loc.id === gameState.currentLocationId && !gameState.isFlying;
           const isDest = loc.id === gameState.activeContract?.destinationId;
+          const locColor = loc.color || "#fbbf24";
 
           return (
             <g 
@@ -169,7 +200,8 @@ const GameMap: React.FC<GameMapProps> = ({ gameState, locations, onLocationClick
                   e.stopPropagation();
                   if(!gameState.isFlying) onLocationClick(loc);
               }}
-              onMouseEnter={!gameState.isFlying ? onHover : undefined}
+              onMouseEnter={() => !gameState.isFlying && onHover && onHover(loc)}
+              onMouseLeave={() => !gameState.isFlying && onHover && onHover(null)}
               className={`${!gameState.isFlying ? 'cursor-pointer hover:opacity-80' : ''} transition-all duration-300`}
             >
               {/* Hit Area */}
@@ -182,8 +214,8 @@ const GameMap: React.FC<GameMapProps> = ({ gameState, locations, onLocationClick
                   y={loc.coords.y - 8} 
                   width="16" 
                   height="16" 
-                  fill={isCurrent ? "#fbbf24" : "#1e293b"} 
-                  stroke={isDest ? "#ef4444" : "#fbbf24"} 
+                  fill={isCurrent ? locColor : "#1e293b"} 
+                  stroke={isDest ? "#ef4444" : locColor} 
                   strokeWidth={isDest ? 3 : 2}
                   transform={`rotate(45 ${loc.coords.x} ${loc.coords.y})`}
                 />
@@ -192,8 +224,8 @@ const GameMap: React.FC<GameMapProps> = ({ gameState, locations, onLocationClick
                   cx={loc.coords.x} 
                   cy={loc.coords.y} 
                   r={8} 
-                  fill={isCurrent ? "#fbbf24" : "#1e293b"} 
-                  stroke={isDest ? "#ef4444" : "#fbbf24"} 
+                  fill={isCurrent ? locColor : "#1e293b"} 
+                  stroke={isDest ? "#ef4444" : locColor} 
                   strokeWidth={isDest ? 3 : 2}
                 />
               )}
@@ -203,7 +235,7 @@ const GameMap: React.FC<GameMapProps> = ({ gameState, locations, onLocationClick
                 x={loc.coords.x} 
                 y={loc.coords.y + 24} 
                 textAnchor="middle" 
-                fill={isDest ? "#ef4444" : "#fbbf24"} 
+                fill={isDest ? "#ef4444" : locColor} 
                 fontSize="10" 
                 className="font-mono"
               >
@@ -212,7 +244,7 @@ const GameMap: React.FC<GameMapProps> = ({ gameState, locations, onLocationClick
 
               {/* Current Location Indicator */}
               {isCurrent && (
-                <circle cx={loc.coords.x} cy={loc.coords.y} r={18} fill="none" stroke="#fbbf24" strokeWidth="1" className="animate-ping opacity-75" />
+                <circle cx={loc.coords.x} cy={loc.coords.y} r={18} fill="none" stroke={locColor} strokeWidth="1" className="animate-ping opacity-75" />
               )}
             </g>
           );

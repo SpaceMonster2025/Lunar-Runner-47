@@ -23,6 +23,7 @@ export const LOCATIONS: Location[] = [
     faction: Faction.X33,
     coords: { x: 0, y: 0 }, // Calculated at runtime
     description: "Military surplus aesthetic. Clean, strict, expensive fuel.",
+    color: "#3b82f6", // Blue-500
     fuelPrice: 1.2,
     orbitRadius: 100,
     orbitSpeed: 0.2, // Fast
@@ -35,6 +36,7 @@ export const LOCATIONS: Location[] = [
     faction: Faction.X63,
     coords: { x: 0, y: 0 },
     description: "Neon-lit marketplace. Risky deals, average fuel prices.",
+    color: "#d946ef", // Fuchsia-500
     fuelPrice: 0.9,
     orbitRadius: 130,
     orbitSpeed: 0.15,
@@ -47,6 +49,7 @@ export const LOCATIONS: Location[] = [
     faction: Faction.X99,
     coords: { x: 0, y: 0 },
     description: "Smoky, dim lights. Cheap dirty fuel, high repair costs.",
+    color: "#f97316", // Orange-500
     fuelPrice: 0.6,
     orbitRadius: 115,
     orbitSpeed: 0.18,
@@ -61,6 +64,7 @@ export const LOCATIONS: Location[] = [
     faction: Faction.X33,
     coords: { x: 0, y: 0 },
     description: "Terraformed agricultural dome.",
+    color: "#22c55e", // Green-500
     orbitRadius: 220,
     orbitSpeed: 0.08,
     initialAngle: 45
@@ -72,6 +76,7 @@ export const LOCATIONS: Location[] = [
     faction: Faction.X63,
     coords: { x: 0, y: 0 },
     description: "Corporate mining facility.",
+    color: "#94a3b8", // Slate-400
     orbitRadius: 260,
     orbitSpeed: 0.06,
     initialAngle: 180
@@ -83,6 +88,7 @@ export const LOCATIONS: Location[] = [
     faction: Faction.X99,
     coords: { x: 0, y: 0 },
     description: "Pirate haven in the red dust.",
+    color: "#ef4444", // Red-500
     orbitRadius: 290,
     orbitSpeed: 0.05,
     initialAngle: 300
@@ -94,6 +100,7 @@ export const LOCATIONS: Location[] = [
     faction: Faction.X33,
     coords: { x: 0, y: 0 },
     description: "Ice harvesting plant.",
+    color: "#06b6d4", // Cyan-500
     orbitRadius: 240,
     orbitSpeed: 0.07,
     initialAngle: 90
@@ -105,6 +112,7 @@ export const LOCATIONS: Location[] = [
     faction: Faction.NEUTRAL,
     coords: { x: 0, y: 0 },
     description: "Luxury resort for the elite.",
+    color: "#eab308", // Yellow-500
     orbitRadius: 310,
     orbitSpeed: 0.04,
     initialAngle: 0

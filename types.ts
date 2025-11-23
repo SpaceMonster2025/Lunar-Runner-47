@@ -23,6 +23,7 @@ export interface Location {
   faction: Faction;
   coords: Coordinates;
   description: string;
+  color: string; // Hex color for map rendering
   fuelPrice?: number; // Only stations sell fuel
   // Orbital Mechanics
   orbitRadius?: number;
@@ -61,6 +62,7 @@ export interface GameState {
   ship: ShipStats;
   day: number;
   gameTime: number; // Global ticker for orbits
+  contracts: Contract[]; // Available global contracts
   isFlying: boolean;
   flightProgress: number; // 0 to 1 (Approximate for flight bar)
   flightOriginId: string | null;
