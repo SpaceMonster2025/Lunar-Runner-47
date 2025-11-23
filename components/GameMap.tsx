@@ -143,6 +143,12 @@ const GameMap: React.FC<GameMapProps> = ({ gameState, locations, onLocationClick
         className="w-full h-full relative z-10"
         preserveAspectRatio="xMidYMid slice"
       >
+        <defs>
+          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#ef4444" />
+          </marker>
+        </defs>
+
         {/* Stars */}
         {stars.map((s, i) => (
             <circle 
@@ -169,7 +175,25 @@ const GameMap: React.FC<GameMapProps> = ({ gameState, locations, onLocationClick
             />
         ))}
 
-        {/* Flight Path Line (Dynamic Target) */}
+        {/* Active Contract Mission Vector (Arrow) - Shown when docked with active contract */}
+        {gameState.activeContract && !gameState.isFlying && (
+          <g>
+            <line
+              x1={shipPosition.x}
+              y1={shipPosition.y}
+              x2={locations.find(l => l.id === gameState.activeContract?.destinationId)?.coords.x ?? 0}
+              y2={locations.find(l => l.id === gameState.activeContract?.destinationId)?.coords.y ?? 0}
+              stroke="#ef4444"
+              strokeWidth="2"
+              strokeDasharray="4 2"
+              markerEnd="url(#arrowhead)"
+              className="animate-pulse"
+              opacity="0.8"
+            />
+          </g>
+        )}
+
+        {/* Flight Path Line (Dynamic Target) - Shown when flying */}
         {gameState.isFlying && gameState.flightOriginId && gameState.flightDestinationId && (
           <line 
             x1={shipPosition.x}

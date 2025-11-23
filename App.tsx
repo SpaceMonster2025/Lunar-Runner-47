@@ -114,10 +114,32 @@ export default function App() {
 
   // --- GAME LOOP (ORBITS) ---
   const updateGameLoop = () => {
-      setGameState(prev => ({
-          ...prev,
-          gameTime: prev.gameTime + 1
-      }));
+      setGameState(prev => {
+          let newCredits = prev.credits;
+          let logs = prev.logs;
+
+          // DOCKING FEE PENALTY
+          // If contract is active AND we are not flying AND we have credits
+          if (prev.activeContract && !prev.isFlying && prev.currentLocationId) {
+             // Every 60 ticks (approx 1 sec) deduct 1 credit
+             if (prev.gameTime % 60 === 0) {
+                 newCredits = Math.max(0, newCredits - 1);
+                 
+                 // Alert player every 10 credits lost or first tick
+                 if (prev.gameTime % 300 === 0) {
+                     logs = ["ALERT: DOCKING OVERTIME PENALTY -1CR", ...logs].slice(0, LOG_MAX_LENGTH);
+                     if (audioInitialized && !isMuted) audioManager.current.playError();
+                 }
+             }
+          }
+
+          return {
+              ...prev,
+              credits: newCredits,
+              logs: logs,
+              gameTime: prev.gameTime + 1
+          };
+      });
       requestRef.current = requestAnimationFrame(updateGameLoop);
   };
 
@@ -415,6 +437,9 @@ export default function App() {
           logs: [`ACCEPTED: ${c.title}`, ...prev.logs].slice(0, LOG_MAX_LENGTH)
       }));
       setGeneratedContracts(prev => prev.filter(con => con.id !== c.id));
+      
+      // Select the destination automatically to encourage flight
+      setSelectedLocationId(c.destinationId);
   };
 
   const confirmRefuel = () => {
@@ -512,7 +537,9 @@ export default function App() {
 
                 <div className="flex items-center gap-2">
                     <DollarSign size={18} />
-                    <span className="text-xl tracking-widest">{gameState.credits.toString().padStart(5, '0')}</span>
+                    <span className={`text-xl tracking-widest ${gameState.activeContract && !gameState.isFlying ? "text-red-500 animate-pulse" : ""}`}>
+                        {gameState.credits.toString().padStart(5, '0')}
+                    </span>
                 </div>
                 <div className="flex items-center gap-2">
                     <Fuel size={18} className={gameState.fuel < 100 ? "text-red-500 animate-pulse" : ""} />
@@ -649,6 +676,14 @@ export default function App() {
                                 </h2>
                                 <span className="text-xs font-mono text-zinc-500">{currentLocation?.faction}</span>
                             </div>
+                            
+                            {/* DOCKING PENALTY WARNING */}
+                            {gameState.activeContract && (
+                                <div className="bg-red-900/20 border border-red-500/50 p-2 mb-2 flex items-center justify-between text-red-400 animate-pulse">
+                                    <span className="text-xs font-bold">⚠ DEPARTURE OVERDUE</span>
+                                    <span className="text-[10px] font-mono">FEES ACCUMULATING</span>
+                                </div>
+                            )}
 
                             {/* REFUEL & REPAIR GRID */}
                             <div className="grid grid-cols-1 gap-4">

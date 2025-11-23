@@ -1,3 +1,4 @@
+
 export class AudioManager {
   private ctx: AudioContext;
   private masterGain: GainNode;
@@ -200,37 +201,48 @@ export class AudioManager {
     }
   }
 
-  // Deep Space Ambience
+  // Retro-Futuristic Space Ambience
   startAmbience() {
     if (this.ambienceSource) return;
 
-    // Pink noiseish
-    const bufferSize = this.ctx.sampleRate * 5;
+    // Create White Noise Buffer
+    const bufferSize = this.ctx.sampleRate * 4; // 4 second loop
     const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
     const data = buffer.getChannelData(0);
-    let lastOut = 0;
+    
     for (let i = 0; i < bufferSize; i++) {
-        const white = Math.random() * 2 - 1;
-        data[i] = (lastOut + (0.02 * white)) / 1.02;
-        lastOut = data[i];
-        data[i] *= 3.5; // Compensate for gain loss
+        data[i] = (Math.random() * 2 - 1);
     }
 
     this.ambienceSource = this.ctx.createBufferSource();
     this.ambienceSource.buffer = buffer;
     this.ambienceSource.loop = true;
 
-    // Highpass to remove mud, keep the "hiss" of space
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = 'highpass';
-    filter.frequency.value = 500;
-    
-    const gain = this.ctx.createGain();
-    gain.gain.value = 0.05;
+    // 1. High-Pass Filter (The request)
+    // Cut everything below 800Hz to remove the "mud" and deep rumble.
+    // This leaves the "hiss" and "air" frequencies associated with vacuum/radio silence.
+    const highPass = this.ctx.createBiquadFilter();
+    highPass.type = 'highpass';
+    highPass.frequency.value = 800; 
 
-    this.ambienceSource.connect(filter);
-    filter.connect(gain);
+    // 2. Low-Pass Filter (Refinement)
+    // Cut extremely high frequencies (>5kHz) to avoid digital harshness.
+    // This mimics the limited bandwidth of 1940s audio equipment.
+    const lowPass = this.ctx.createBiquadFilter();
+    lowPass.type = 'lowpass';
+    lowPass.frequency.value = 5000;
+
+    // 3. Gain
+    // Very subtle background texture.
+    const gain = this.ctx.createGain();
+    gain.gain.value = 0.035; 
+
+    // Chain: Source -> HP -> LP -> Gain -> Master
+    this.ambienceSource.connect(highPass);
+    highPass.connect(lowPass);
+    lowPass.connect(gain);
     gain.connect(this.masterGain);
+
     this.ambienceSource.start();
   }
 }
