@@ -65,6 +65,7 @@ export const LOCATIONS: Location[] = [
     coords: { x: 0, y: 0 },
     description: "Terraformed agricultural dome.",
     color: "#22c55e", // Green-500
+    fuelPrice: 2.5, // High emergency price
     orbitRadius: 220,
     orbitSpeed: 0.08,
     initialAngle: 45
@@ -77,6 +78,7 @@ export const LOCATIONS: Location[] = [
     coords: { x: 0, y: 0 },
     description: "Corporate mining facility.",
     color: "#94a3b8", // Slate-400
+    fuelPrice: 2.8,
     orbitRadius: 260,
     orbitSpeed: 0.06,
     initialAngle: 180
@@ -89,6 +91,7 @@ export const LOCATIONS: Location[] = [
     coords: { x: 0, y: 0 },
     description: "Pirate haven in the red dust.",
     color: "#ef4444", // Red-500
+    fuelPrice: 4.0, // Black market gouging
     orbitRadius: 290,
     orbitSpeed: 0.05,
     initialAngle: 300
@@ -101,6 +104,7 @@ export const LOCATIONS: Location[] = [
     coords: { x: 0, y: 0 },
     description: "Ice harvesting plant.",
     color: "#06b6d4", // Cyan-500
+    fuelPrice: 2.5,
     orbitRadius: 240,
     orbitSpeed: 0.07,
     initialAngle: 90
@@ -113,6 +117,7 @@ export const LOCATIONS: Location[] = [
     coords: { x: 0, y: 0 },
     description: "Luxury resort for the elite.",
     color: "#eab308", // Yellow-500
+    fuelPrice: 5.0, // Exorbitant
     orbitRadius: 310,
     orbitSpeed: 0.04,
     initialAngle: 0

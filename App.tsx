@@ -499,7 +499,7 @@ export default function App() {
       );
   }
 
-  const isDocked = currentLocation?.type === LocationType.STATION && !gameState.isFlying;
+  const isLanded = !gameState.isFlying && currentLocation;
 
   return (
     <div className="w-full h-screen bg-zinc-950 p-4 flex flex-col crt select-none overflow-hidden">
@@ -644,28 +644,32 @@ export default function App() {
                              ) : (
                                  <div className="text-center py-8">
                                      <p className="text-amber-500/50 font-mono text-sm">YOU ARE HERE</p>
-                                     <button onClick={() => { playClick(); setSelectedLocationId(null); }} className="mt-4 text-amber-500 underline" onMouseEnter={playHover}>Back to Station</button>
+                                     <button onClick={() => { playClick(); setSelectedLocationId(null); }} className="mt-4 text-amber-500 underline" onMouseEnter={playHover}>Back to Services</button>
                                  </div>
                              )}
                          </div>
-                    ) : isDocked ? (
-                        // STATION MENU
+                    ) : isLanded ? (
+                        // STATION/MOON MENU
                         <div className="space-y-6">
                             <div className="flex items-center justify-between border-b border-amber-900/50 pb-2">
-                                <h2 className="font-display text-xl text-amber-500">STATION SERVICES</h2>
+                                <h2 className="font-display text-xl text-amber-500">
+                                    {currentLocation.type === LocationType.STATION ? "STATION SERVICES" : "SURFACE LOGISTICS"}
+                                </h2>
                                 <span className="text-xs font-mono text-zinc-500">{currentLocation?.faction}</span>
                             </div>
 
                             {/* REFUEL / REPAIR */}
                             <div className="grid grid-cols-2 gap-2">
+                                {currentLocation.fuelPrice && (
                                 <button 
                                     onClick={handleRefuel}
                                     onMouseEnter={playHover}
                                     className="bg-zinc-800 p-2 border border-zinc-700 hover:border-amber-500 group flex flex-col items-center gap-1"
                                 >
                                     <Fuel size={16} className="text-amber-600 group-hover:text-amber-400" />
-                                    <span className="text-[10px] text-amber-500 uppercase">Refuel ({currentLocation?.fuelPrice}cr/L)</span>
+                                    <span className="text-[10px] text-amber-500 uppercase">Refuel ({currentLocation.fuelPrice}cr/L)</span>
                                 </button>
+                                )}
                                 <button 
                                     onClick={handleRepair}
                                     onMouseEnter={playHover}
@@ -676,7 +680,8 @@ export default function App() {
                                 </button>
                             </div>
 
-                            {/* CONTRACTS */}
+                            {/* CONTRACTS - ONLY AT STATIONS */}
+                            {currentLocation.type === LocationType.STATION && (
                             <div>
                                 <h3 className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-3 border-l-2 border-amber-700 pl-2">Available Contracts</h3>
                                 <div className="space-y-2">
@@ -704,6 +709,7 @@ export default function App() {
                                     )}
                                 </div>
                             </div>
+                            )}
                         </div>
                     ) : (
                          <div className="h-full flex items-center justify-center text-amber-900/50 font-mono text-sm text-center px-4">
