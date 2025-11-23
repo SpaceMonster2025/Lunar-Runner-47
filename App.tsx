@@ -4,7 +4,7 @@ import { LOCATIONS, INITIAL_SHIP_STATS, CONTRACT_TEMPLATES, MUSIC_TRACK_URL } fr
 import GameMap from './components/GameMap';
 import ContractCard from './components/ContractCard';
 import { AudioManager } from './audio';
-import { Gauge, Fuel, DollarSign, Crosshair, Radio, TriangleAlert, Settings, Info, Volume2, VolumeX, Power, Clock } from 'lucide-react';
+import { Gauge, Fuel, DollarSign, Crosshair, Radio, TriangleAlert, Settings, Info, Volume2, VolumeX, Power, Clock, Droplets } from 'lucide-react';
 
 const LOG_MAX_LENGTH = 5;
 
@@ -56,6 +56,7 @@ export default function App() {
   const [gameOver, setGameOver] = useState(false);
   const [audioInitialized, setAudioInitialized] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [fuelToAdd, setFuelToAdd] = useState<number>(0);
   
   // Game Loop Ref
   const requestRef = useRef<number>();
@@ -134,26 +135,41 @@ export default function App() {
       }
   }, []);
 
+  // Reset fuel slider on location change
+  useEffect(() => {
+    setFuelToAdd(0);
+  }, [gameState.currentLocationId]);
+
   // --- GAME LOGIC ---
 
-  // Generate Contracts
-  const refreshContracts = useCallback((stationId: string) => {
-    const station = LOCATIONS.find(l => l.id === stationId);
-    if (!station) return;
+  // Helper to generate a single random contract
+  const generateNewContract = (stationId: string, currentTime: number, indexOffset: number = 0): Contract | null => {
+      const station = LOCATIONS.find(l => l.id === stationId);
+      if (!station) return null;
 
-    const numContracts = 3;
-    const newContracts: Contract[] = [];
-    // Use current GameState Time inside callback is tricky without dep, assume callsite handles logic or we pass time
-    // For simplicity, we will use a rough estimation or pass time as arg. 
-    // Better: use functional state update or ref for time if strict accuracy needed.
-    // Here we will simply grab the time from the state at the moment of generation
-    
-    // NOTE: We can't access gameState.gameTime safely here without it being in deps, 
-    // which would trigger this too often. 
-    // Instead, we will cheat slightly and use Date.now() offset or just standard durations relative to when they are added.
-    // Actually, since we need `expiresAt` to match `gameTime`, we need to read `gameTime`.
-    // We'll do this by reading the `gameState` in the effect that calls this.
-  }, []); // Dep list empty to avoid loops, we will implement the logic inside the useEffect below
+      const template = CONTRACT_TEMPLATES[Math.floor(Math.random() * CONTRACT_TEMPLATES.length)];
+      
+      // Select destination: Any location except current
+      const destinations = LOCATIONS.filter(l => l.id !== stationId);
+      const dest = destinations[Math.floor(Math.random() * destinations.length)];
+      
+      const risk = Math.random() > 0.7 ? 'HIGH' : (Math.random() > 0.4 ? 'MED' : 'LOW');
+      const riskPay = risk === 'HIGH' ? 200 : (risk === 'MED' ? 80 : 0);
+      
+      // Duration: 1500 to 4500 ticks (approx 25s to 75s)
+      const duration = 1500 + Math.floor(Math.random() * 3000);
+
+      return {
+        id: `cnt-${Date.now()}-${indexOffset}`,
+        title: template.title,
+        description: template.desc,
+        destinationId: dest.id,
+        pay: Math.floor(template.basePay + riskPay),
+        riskLevel: risk as 'LOW'|'MED'|'HIGH',
+        faction: station.faction,
+        expiresAt: currentTime + duration
+      };
+  };
 
   // Effect to handle contract generation and lifecycle
   useEffect(() => {
@@ -174,6 +190,17 @@ export default function App() {
              snatchedId = active[idx].id;
              active.splice(idx, 1);
         }
+        
+        // 2. Replenishment Logic
+        // If we are at a station OR moon, and contracts are low, randomly spawn one
+        if (active.length < 3 && currentLocation) {
+            if (Math.random() < 0.005) { // ~0.5% chance per tick to spawn a new one
+                const newContract = generateNewContract(currentLocation.id, now, Math.random());
+                if (newContract) {
+                    active.push(newContract);
+                }
+            }
+        }
 
         if (active.length !== generatedContracts.length) {
             setGeneratedContracts(active);
@@ -181,13 +208,19 @@ export default function App() {
                  addLog("ALERT: CONTRACT TAKEN BY RIVAL RUNNER.");
             }
         }
+    } else if (currentLocation && !gameState.isFlying) {
+         // If completely empty and we are landed, force spawn one (slowly)
+         if (Math.random() < 0.01) {
+             const newContract = generateNewContract(currentLocation.id, gameState.gameTime, Math.random());
+             if (newContract) setGeneratedContracts([newContract]);
+         }
     }
   }, [gameState.gameTime]); // Runs every tick
 
   // Initial Generation / Refresh on Arrival
   const spawnContractsForLocation = (stationId: string, currentTime: number) => {
       const station = LOCATIONS.find(l => l.id === stationId);
-      if (!station || station.type !== LocationType.STATION) {
+      if (!station) {
           setGeneratedContracts([]);
           return;
       }
@@ -196,26 +229,8 @@ export default function App() {
       const newContracts: Contract[] = [];
 
       for (let i = 0; i < numContracts; i++) {
-        const template = CONTRACT_TEMPLATES[Math.floor(Math.random() * CONTRACT_TEMPLATES.length)];
-        const destinations = LOCATIONS.filter(l => l.type === LocationType.MOON);
-        const dest = destinations[Math.floor(Math.random() * destinations.length)];
-        
-        const risk = Math.random() > 0.7 ? 'HIGH' : (Math.random() > 0.4 ? 'MED' : 'LOW');
-        const riskPay = risk === 'HIGH' ? 200 : (risk === 'MED' ? 80 : 0);
-        
-        // Duration: 1500 to 4500 ticks (approx 25s to 75s)
-        const duration = 1500 + Math.floor(Math.random() * 3000);
-
-        newContracts.push({
-          id: `cnt-${Date.now()}-${i}`,
-          title: template.title,
-          description: template.desc,
-          destinationId: dest.id,
-          pay: Math.floor(template.basePay + riskPay),
-          riskLevel: risk as 'LOW'|'MED'|'HIGH',
-          faction: station.faction,
-          expiresAt: currentTime + duration
-        });
+        const c = generateNewContract(stationId, currentTime, i);
+        if (c) newContracts.push(c);
       }
       setGeneratedContracts(newContracts);
   };
@@ -306,15 +321,6 @@ export default function App() {
                   if (audioInitialized) audioManager.current.playCash();
                   newContract = null;
               }
-
-              // Refresh contracts if at station
-              // We call the spawn function directly here to use the current time from prev state + 1
-              // But we can't access methods easily inside setGameState.
-              // Instead, we'll trigger an effect or just handle it in the next render loop via a flag or just outside this setter?
-              // To keep it simple, we'll use a timeout or just update the contract state in a separate useEffect that watches 'currentLocationId' change.
-              
-              // Actually, we can just set logs/state here, and use an Effect on `gameState.currentLocationId` to spawn contracts.
-              // That is cleaner.
 
               return {
                   ...prev,
@@ -411,33 +417,19 @@ export default function App() {
       setGeneratedContracts(prev => prev.filter(con => con.id !== c.id));
   };
 
-  const handleRefuel = () => {
-      if (!currentLocation?.fuelPrice) return;
-      const fuelNeeded = gameState.ship.maxFuel - gameState.fuel;
-      const cost = Math.floor(fuelNeeded * currentLocation.fuelPrice);
-      if (fuelNeeded <= 0) return;
-
+  const confirmRefuel = () => {
+      if (!currentLocation?.fuelPrice || fuelToAdd <= 0) return;
+      const cost = Math.floor(fuelToAdd * currentLocation.fuelPrice);
+      
       if (gameState.credits >= cost) {
           if (audioInitialized) audioManager.current.playCash();
           setGameState(prev => ({
               ...prev,
-              fuel: prev.ship.maxFuel,
+              fuel: Math.min(prev.ship.maxFuel, prev.fuel + fuelToAdd),
               credits: prev.credits - cost,
-              logs: [`REFUELED FULL. -${cost} CR`, ...prev.logs].slice(0, LOG_MAX_LENGTH)
+              logs: [`REFUELED ${fuelToAdd.toFixed(0)}L. -${cost} CR`, ...prev.logs].slice(0, LOG_MAX_LENGTH)
           }));
-      } else {
-          // Partial
-          const affordableFuel = Math.floor(gameState.credits / currentLocation.fuelPrice);
-          const costActual = Math.floor(affordableFuel * currentLocation.fuelPrice);
-           if (costActual > 0) {
-               if (audioInitialized) audioManager.current.playCash();
-               setGameState(prev => ({
-                  ...prev,
-                  fuel: prev.fuel + affordableFuel,
-                  credits: prev.credits - costActual,
-                  logs: [`PARTIAL REFUEL. -${costActual} CR`, ...prev.logs].slice(0, LOG_MAX_LENGTH)
-              }));
-           }
+          setFuelToAdd(0);
       }
   };
 
@@ -510,7 +502,7 @@ export default function App() {
                     <Radio className="animate-pulse" />
                     LUNAR RUNNER '47
                 </h1>
-                <span className="text-xs font-mono text-zinc-500 mt-1">v1.2.0 // ORBITAL SYNC ACTIVE</span>
+                <span className="text-xs font-mono text-zinc-500 mt-1">v1.3.0 // ORBITAL SYNC ACTIVE</span>
             </div>
             
             <div className="flex items-center gap-8 font-mono text-amber-400">
@@ -658,30 +650,98 @@ export default function App() {
                                 <span className="text-xs font-mono text-zinc-500">{currentLocation?.faction}</span>
                             </div>
 
-                            {/* REFUEL / REPAIR */}
-                            <div className="grid grid-cols-2 gap-2">
+                            {/* REFUEL & REPAIR GRID */}
+                            <div className="grid grid-cols-1 gap-4">
+                                {/* FUEL PUMP */}
                                 {currentLocation.fuelPrice && (
-                                <button 
-                                    onClick={handleRefuel}
-                                    onMouseEnter={playHover}
-                                    className="bg-zinc-800 p-2 border border-zinc-700 hover:border-amber-500 group flex flex-col items-center gap-1"
-                                >
-                                    <Fuel size={16} className="text-amber-600 group-hover:text-amber-400" />
-                                    <span className="text-[10px] text-amber-500 uppercase">Refuel ({currentLocation.fuelPrice}cr/L)</span>
-                                </button>
+                                <div className="bg-zinc-900/50 border border-zinc-700 p-3">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <div className="flex items-center gap-2 text-amber-500 font-bold text-xs uppercase">
+                                            <Droplets size={14} />
+                                            <span>Fuel Pump</span>
+                                        </div>
+                                        <div className="text-xs font-mono text-amber-700">{currentLocation.fuelPrice} CR/L</div>
+                                    </div>
+
+                                    {/* Slider & Controls */}
+                                    {(() => {
+                                        const maxCapacity = gameState.ship.maxFuel;
+                                        const currentFuel = gameState.fuel;
+                                        const spaceEmpty = maxCapacity - currentFuel;
+                                        const price = currentLocation.fuelPrice;
+                                        const maxAffordable = Math.floor(gameState.credits / price);
+                                        const maxBuyable = Math.min(spaceEmpty, maxAffordable);
+                                        const cost = Math.ceil(fuelToAdd * price);
+
+                                        return (
+                                            <div className="space-y-3">
+                                                <input 
+                                                    type="range" 
+                                                    min="0" 
+                                                    max={maxBuyable} 
+                                                    value={fuelToAdd}
+                                                    onChange={(e) => setFuelToAdd(Number(e.target.value))}
+                                                    className="w-full accent-amber-500 h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer"
+                                                />
+                                                
+                                                <div className="flex justify-between text-[10px] font-mono text-zinc-400">
+                                                    <button onClick={() => setFuelToAdd(0)} className="hover:text-amber-500">[RESET]</button>
+                                                    <div className="flex gap-2">
+                                                        <button 
+                                                            onClick={() => {
+                                                                if (gameState.activeContract) {
+                                                                     const dest = currentLocations.find(l => l.id === gameState.activeContract?.destinationId);
+                                                                     if (dest) {
+                                                                         const dist = getDistance(currentLocation.coords, dest.coords);
+                                                                         const needed = Math.ceil(getFuelCost(dist));
+                                                                         const toBuy = Math.max(0, needed - currentFuel);
+                                                                         setFuelToAdd(Math.min(toBuy, maxBuyable));
+                                                                     }
+                                                                }
+                                                            }} 
+                                                            className="hover:text-amber-500 disabled:opacity-30"
+                                                            disabled={!gameState.activeContract}
+                                                        >
+                                                            [REQ]
+                                                        </button>
+                                                        <button onClick={() => setFuelToAdd(maxBuyable)} className="hover:text-amber-500">[MAX]</button>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex justify-between items-end border-t border-zinc-700 pt-2">
+                                                    <div className="text-xs font-mono">
+                                                        <span className="text-zinc-500">ADD: </span>
+                                                        <span className="text-amber-300">{fuelToAdd.toFixed(0)} L</span>
+                                                    </div>
+                                                    <button 
+                                                        onClick={confirmRefuel}
+                                                        disabled={fuelToAdd <= 0 || gameState.credits < cost}
+                                                        className="bg-amber-900/30 border border-amber-500 text-amber-500 text-xs px-3 py-1 hover:bg-amber-500 hover:text-black transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    >
+                                                        BUY (-{cost} CR)
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
                                 )}
+
+                                {/* REPAIR BUTTON */}
                                 <button 
                                     onClick={handleRepair}
                                     onMouseEnter={playHover}
-                                    className="bg-zinc-800 p-2 border border-zinc-700 hover:border-amber-500 group flex flex-col items-center gap-1"
+                                    className="bg-zinc-800 p-2 border border-zinc-700 hover:border-amber-500 group flex items-center justify-between px-4"
                                 >
-                                    <Settings size={16} className="text-amber-600 group-hover:text-amber-400" />
-                                    <span className="text-[10px] text-amber-500 uppercase">Repair Hull</span>
+                                    <div className="flex items-center gap-2">
+                                        <Settings size={16} className="text-amber-600 group-hover:text-amber-400" />
+                                        <span className="text-xs text-amber-500 uppercase font-bold">Repair Hull</span>
+                                    </div>
+                                    <span className="text-[10px] font-mono text-zinc-500 group-hover:text-amber-500">2 CR / HP</span>
                                 </button>
                             </div>
 
-                            {/* CONTRACTS - ONLY AT STATIONS */}
-                            {currentLocation.type === LocationType.STATION && (
+                            {/* CONTRACTS - NOW AVAILABLE AT MOONS AND STATIONS */}
                             <div>
                                 <h3 className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-3 border-l-2 border-amber-700 pl-2">Available Contracts</h3>
                                 <div className="space-y-2">
@@ -691,6 +751,8 @@ export default function App() {
                                             // FIX: Safe checks for currentLocation and dest
                                             const dist = (dest && currentLocation) ? getDistance(currentLocation.coords, dest.coords) : 0;
                                             const cost = getFuelCost(dist);
+                                            const destName = dest?.name || "Unknown";
+
                                             return (
                                                 <ContractCard 
                                                     key={c.id} 
@@ -701,15 +763,17 @@ export default function App() {
                                                     currentFuelCost={cost}
                                                     onHover={playHover}
                                                     gameTime={gameState.gameTime}
+                                                    destinationName={destName}
                                                 />
                                             );
                                         })
                                     ) : (
-                                        <p className="text-xs font-mono text-zinc-600 italic py-4 text-center">No contracts available.</p>
+                                        <div className="text-xs font-mono text-zinc-600 italic py-4 text-center border border-dashed border-zinc-800">
+                                            No contracts available.<br/>Stand by for new transmissions...
+                                        </div>
                                     )}
                                 </div>
                             </div>
-                            )}
                         </div>
                     ) : (
                          <div className="h-full flex items-center justify-center text-amber-900/50 font-mono text-sm text-center px-4">
