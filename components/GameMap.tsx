@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Coordinates, GameState, Location, LocationType, SCREEN_HEIGHT, SCREEN_WIDTH, CENTER } from '../types';
 
 interface GameMapProps {
@@ -11,7 +11,10 @@ interface GameMapProps {
 }
 
 const GameMap: React.FC<GameMapProps> = ({ gameState, locations, onLocationClick, onHover, shipPosition, shipRotation }) => {
-  
+  const [viewBox, setViewBox] = useState({ x: 0, y: 0, w: SCREEN_WIDTH, h: SCREEN_HEIGHT });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
   // Extract unique orbit radii to draw rings
   const orbits = useMemo(() => {
     const radii = new Set<number>();
@@ -21,20 +24,106 @@ const GameMap: React.FC<GameMapProps> = ({ gameState, locations, onLocationClick
     return Array.from(radii).sort((a,b) => a - b);
   }, [locations]);
 
+  const handleWheel = (e: React.WheelEvent) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+
+    const px = offsetX / rect.width;
+    const py = offsetY / rect.height;
+
+    const { w: curW, h: curH, x: curX, y: curY } = viewBox;
+    const ZOOM_SPEED = 0.15;
+    
+    // Zoom in (negative delta) -> smaller viewbox
+    // Zoom out (positive delta) -> larger viewbox
+    const factor = e.deltaY > 0 ? (1 + ZOOM_SPEED) : (1 - ZOOM_SPEED);
+    
+    let newW = curW * factor;
+    let newH = curH * factor;
+
+    // Constraints
+    const MIN_W = 200;
+    const MAX_W = 2500;
+
+    if (newW < MIN_W) {
+        newW = MIN_W;
+        newH = MIN_W * (SCREEN_HEIGHT / SCREEN_WIDTH);
+    }
+    if (newW > MAX_W) {
+        newW = MAX_W;
+        newH = MAX_W * (SCREEN_HEIGHT / SCREEN_WIDTH);
+    }
+
+    const newX = curX + px * (curW - newW);
+    const newY = curY + py * (curH - newH);
+
+    setViewBox({ x: newX, y: newY, w: newW, h: newH });
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+      if (e.button === 2) { // Right Click
+          setIsDragging(true);
+          setDragStart({ x: e.clientX, y: e.clientY });
+      }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+      if (isDragging) {
+          const rect = e.currentTarget.getBoundingClientRect();
+          
+          // Calculate delta in screen pixels
+          const dx = e.clientX - dragStart.x;
+          const dy = e.clientY - dragStart.y;
+          
+          // Convert to SVG units based on current zoom (viewBox width / screen width)
+          const scaleX = viewBox.w / rect.width;
+          const scaleY = viewBox.h / rect.height;
+
+          // Update viewBox (Panning logic: dragging right moves camera left relative to content, so subtract delta)
+          setViewBox(prev => ({
+              ...prev,
+              x: prev.x - (dx * scaleX),
+              y: prev.y - (dy * scaleY)
+          }));
+
+          // Reset drag start to current position for next frame
+          setDragStart({ x: e.clientX, y: e.clientY });
+      }
+  };
+
+  const handleMouseUp = () => {
+      setIsDragging(false);
+  };
+
   return (
-    <div className="relative w-full h-full border-2 border-amber-900/50 bg-slate-950 rounded-lg overflow-hidden shadow-[inset_0_0_20px_rgba(0,0,0,0.8)]">
-      {/* Grid Background */}
+    <div 
+      className={`relative w-full h-full border-2 border-amber-900/50 bg-slate-950 rounded-lg overflow-hidden shadow-[inset_0_0_20px_rgba(0,0,0,0.8)] ${isDragging ? 'cursor-grabbing' : 'cursor-crosshair'}`}
+      onWheel={handleWheel}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+      onContextMenu={(e) => e.preventDefault()} // Disable default context menu
+    >
+      {/* Grid Background - Static "Radar Screen" overlay */}
       <div 
-        className="absolute inset-0 opacity-10"
+        className="absolute inset-0 opacity-10 pointer-events-none"
         style={{
           backgroundImage: 'linear-gradient(#fbbf24 1px, transparent 1px), linear-gradient(90deg, #fbbf24 1px, transparent 1px)',
           backgroundSize: '40px 40px'
         }}
       />
+      
+      {/* Controls hint */}
+      <div className="absolute top-2 right-2 z-20 pointer-events-none opacity-30 text-[10px] text-amber-500 font-mono text-right">
+         SCROLL: ZOOM<br/>R-CLICK: PAN
+      </div>
 
       <svg 
-        viewBox={`0 0 ${SCREEN_WIDTH} ${SCREEN_HEIGHT}`} 
+        viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`} 
         className="w-full h-full relative z-10"
+        preserveAspectRatio="xMidYMid slice"
       >
         {/* Orbit Rings */}
         {orbits.map(r => (
@@ -76,7 +165,10 @@ const GameMap: React.FC<GameMapProps> = ({ gameState, locations, onLocationClick
           return (
             <g 
               key={loc.id} 
-              onClick={() => !gameState.isFlying && onLocationClick(loc)}
+              onClick={(e) => {
+                  e.stopPropagation();
+                  if(!gameState.isFlying) onLocationClick(loc);
+              }}
               onMouseEnter={!gameState.isFlying ? onHover : undefined}
               className={`${!gameState.isFlying ? 'cursor-pointer hover:opacity-80' : ''} transition-all duration-300`}
             >

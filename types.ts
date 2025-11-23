@@ -39,6 +39,7 @@ export interface Contract {
   // Dynamic values calculated at runtime, kept here for initial reference if needed
   baseDistance?: number; 
   deadline?: number; 
+  expiresAt: number; // Game tick when contract disappears
   riskLevel: 'LOW' | 'MED' | 'HIGH';
   faction: Faction;
 }

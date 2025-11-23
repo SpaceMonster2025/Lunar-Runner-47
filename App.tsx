@@ -143,32 +143,88 @@ export default function App() {
 
     const numContracts = 3;
     const newContracts: Contract[] = [];
+    // Use current GameState Time inside callback is tricky without dep, assume callsite handles logic or we pass time
+    // For simplicity, we will use a rough estimation or pass time as arg. 
+    // Better: use functional state update or ref for time if strict accuracy needed.
+    // Here we will simply grab the time from the state at the moment of generation
+    
+    // NOTE: We can't access gameState.gameTime safely here without it being in deps, 
+    // which would trigger this too often. 
+    // Instead, we will cheat slightly and use Date.now() offset or just standard durations relative to when they are added.
+    // Actually, since we need `expiresAt` to match `gameTime`, we need to read `gameTime`.
+    // We'll do this by reading the `gameState` in the effect that calls this.
+  }, []); // Dep list empty to avoid loops, we will implement the logic inside the useEffect below
 
-    for (let i = 0; i < numContracts; i++) {
-      const template = CONTRACT_TEMPLATES[Math.floor(Math.random() * CONTRACT_TEMPLATES.length)];
-      const destinations = LOCATIONS.filter(l => l.type === LocationType.MOON);
-      const dest = destinations[Math.floor(Math.random() * destinations.length)];
-      
-      const risk = Math.random() > 0.7 ? 'HIGH' : (Math.random() > 0.4 ? 'MED' : 'LOW');
-      const riskPay = risk === 'HIGH' ? 200 : (risk === 'MED' ? 80 : 0);
-      
-      newContracts.push({
-        id: `cnt-${Date.now()}-${i}`,
-        title: template.title,
-        description: template.desc,
-        destinationId: dest.id,
-        pay: Math.floor(template.basePay + riskPay),
-        riskLevel: risk as 'LOW'|'MED'|'HIGH',
-        faction: station.faction
-      });
-    }
-    setGeneratedContracts(newContracts);
-  }, []);
-
-  // Initial generation
+  // Effect to handle contract generation and lifecycle
   useEffect(() => {
-    refreshContracts(gameState.currentLocationId);
-  }, [refreshContracts]);
+    // 1. Contract Maintenance (Expiry & Rivals)
+    if (generatedContracts.length > 0) {
+        const now = gameState.gameTime;
+        
+        // Filter out expired contracts
+        const active = generatedContracts.filter(c => c.expiresAt > now);
+        
+        // Random "Rival Runner" Snatch
+        // Chance per tick: 1 in 2000
+        const rivalSnatch = Math.random() < 0.0005;
+        let snatchedId: string | null = null;
+
+        if (rivalSnatch && active.length > 0) {
+             const idx = Math.floor(Math.random() * active.length);
+             snatchedId = active[idx].id;
+             active.splice(idx, 1);
+        }
+
+        if (active.length !== generatedContracts.length) {
+            setGeneratedContracts(active);
+            if (snatchedId) {
+                 addLog("ALERT: CONTRACT TAKEN BY RIVAL RUNNER.");
+            }
+        }
+    }
+  }, [gameState.gameTime]); // Runs every tick
+
+  // Initial Generation / Refresh on Arrival
+  const spawnContractsForLocation = (stationId: string, currentTime: number) => {
+      const station = LOCATIONS.find(l => l.id === stationId);
+      if (!station || station.type !== LocationType.STATION) {
+          setGeneratedContracts([]);
+          return;
+      }
+
+      const numContracts = 3;
+      const newContracts: Contract[] = [];
+
+      for (let i = 0; i < numContracts; i++) {
+        const template = CONTRACT_TEMPLATES[Math.floor(Math.random() * CONTRACT_TEMPLATES.length)];
+        const destinations = LOCATIONS.filter(l => l.type === LocationType.MOON);
+        const dest = destinations[Math.floor(Math.random() * destinations.length)];
+        
+        const risk = Math.random() > 0.7 ? 'HIGH' : (Math.random() > 0.4 ? 'MED' : 'LOW');
+        const riskPay = risk === 'HIGH' ? 200 : (risk === 'MED' ? 80 : 0);
+        
+        // Duration: 1500 to 4500 ticks (approx 25s to 75s)
+        const duration = 1500 + Math.floor(Math.random() * 3000);
+
+        newContracts.push({
+          id: `cnt-${Date.now()}-${i}`,
+          title: template.title,
+          description: template.desc,
+          destinationId: dest.id,
+          pay: Math.floor(template.basePay + riskPay),
+          riskLevel: risk as 'LOW'|'MED'|'HIGH',
+          faction: station.faction,
+          expiresAt: currentTime + duration
+        });
+      }
+      setGeneratedContracts(newContracts);
+  };
+
+  // Initial load contracts
+  useEffect(() => {
+      // Only run once on mount
+      spawnContractsForLocation('station-x33', 0);
+  }, []);
 
 
   // Travel Logic
@@ -252,12 +308,13 @@ export default function App() {
               }
 
               // Refresh contracts if at station
-              const destLoc = LOCATIONS.find(l => l.id === arrivalId);
-              if (destLoc?.type === LocationType.STATION) {
-                  refreshContracts(destLoc.id);
-              } else {
-                  setGeneratedContracts([]);
-              }
+              // We call the spawn function directly here to use the current time from prev state + 1
+              // But we can't access methods easily inside setGameState.
+              // Instead, we'll trigger an effect or just handle it in the next render loop via a flag or just outside this setter?
+              // To keep it simple, we'll use a timeout or just update the contract state in a separate useEffect that watches 'currentLocationId' change.
+              
+              // Actually, we can just set logs/state here, and use an Effect on `gameState.currentLocationId` to spawn contracts.
+              // That is cleaner.
 
               return {
                   ...prev,
@@ -292,6 +349,12 @@ export default function App() {
 
   }, [gameState.isFlying, gameState.gameTime]); // Run every tick when flying
 
+  // Trigger contract spawn on arrival
+  useEffect(() => {
+      if (!gameState.isFlying && gameState.currentLocationId) {
+          spawnContractsForLocation(gameState.currentLocationId, gameState.gameTime);
+      }
+  }, [gameState.currentLocationId, gameState.isFlying]); // When location changes and we stop flying
 
   const startTravel = (targetId: string) => {
     playClick();
@@ -632,11 +695,12 @@ export default function App() {
                                                     currentDistance={dist}
                                                     currentFuelCost={cost}
                                                     onHover={playHover}
+                                                    gameTime={gameState.gameTime}
                                                 />
                                             );
                                         })
                                     ) : (
-                                        <p className="text-xs font-mono text-zinc-600 italic py-4 text-center">No contracts available at this time.</p>
+                                        <p className="text-xs font-mono text-zinc-600 italic py-4 text-center">No contracts available.</p>
                                     )}
                                 </div>
                             </div>
